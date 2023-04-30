@@ -2,20 +2,14 @@ name: napari-cellular-automata
 display_name: Cellular Automata
 contributions:
   commands:
-    - id: napari-cellular-automata.make_qwidget
-      python_name: napari_cellular_automata._widget:ExampleQWidget
-      title: Make example QWidget
-    - id: napari-cellular-automata.make_magic_widget
-      python_name: napari_cellular_automata._widget:example_magic_widget
-      title: Make example magic widget
-    - id: napari-cellular-automata.make_func_widget
-      python_name: napari_cellular_automata._widget:example_function_widget
-      title: Make example function widget
+    - id: napari-cellular-automata.initialize_world
+      python_name: napari_cellular_automata.widgets:initialize_world
+      title: Initialize World
+    - id: napari-cellular-automata.run_automaton
+      python_name: napari_cellular_automata.widgets:run_automaton
+      title: Run Automaton
   widgets:
-    - command: napari-cellular-automata.make_qwidget
-      display_name: Example QWidget
-    - command: napari-cellular-automata.make_magic_widget
-      display_name: Example Magic Widget
-    - command: napari-cellular-automata.make_func_widget
-      autogenerate: true
-      display_name: Example Function Widget
+    - command: napari-cellular-automata.initialize_world
+      display_name: Initialize World
+    - command: napari-cellular-automata.run_automaton
+      display_name: Run Automaton
