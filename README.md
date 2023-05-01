@@ -9,6 +9,8 @@
 
 A generalized n-dimensional cellular automata engine, using [napari](https://github.com/napari/napari) for visualisation.
 
+https://user-images.githubusercontent.com/23482191/235496634-e4d56432-77dc-4acf-838a-61c98d32c1c0.mp4
+
 ## Installation and Usage
 
 ```
