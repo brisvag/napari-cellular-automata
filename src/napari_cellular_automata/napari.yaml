@@ -5,11 +5,16 @@ contributions:
     - id: napari-cellular-automata.initialize_world
       python_name: napari_cellular_automata.widgets:initialize_world
       title: Initialize World
+    - id: napari-cellular-automata.populate_world
+      python_name: napari_cellular_automata.widgets:populate_world
+      title: Populate World
     - id: napari-cellular-automata.run_automaton
       python_name: napari_cellular_automata.widgets:run_automaton
       title: Run Automaton
   widgets:
     - command: napari-cellular-automata.initialize_world
       display_name: Initialize World
+    - command: napari-cellular-automata.populate_world
+      display_name: Populate World
     - command: napari-cellular-automata.run_automaton
       display_name: Run Automaton

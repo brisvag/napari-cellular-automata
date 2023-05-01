@@ -7,11 +7,42 @@
 [![codecov](https://codecov.io/gh/brisvag/napari-cellular-automata/branch/main/graph/badge.svg)](https://codecov.io/gh/brisvag/napari-cellular-automata)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-cellular-automata)](https://napari-hub.org/plugins/napari-cellular-automata)
 
-A generalized n-dimensional cellular automata engine, using @napari for visualisation.
+A generalized n-dimensional cellular automata engine, using [napari](https://github.com/napari/napari) for visualisation.
 
-Rules are defined as small "transition" dictionaries that define how each state changes into a different state, plus some extra info such as color and state name for visualisation.
+## Installation and Usage
 
-For example, [Conway's Game of Life](https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life) is defined as follows:
+```
+pip install napari-cellular-automata
+```
+
+Open `napari`, then use the `Initialize World` widget to create a new layer with the automaton, of your choice. Use `Populate World` to randomize the initial state as you prefer. Then use the `Run Automaton` widget to run the simulation. You can select multiple states to plot some stats as well.
+
+---
+
+You can also use this as a library:
+
+```python
+from napari-cellular-automata.engine import populate_world_with_state, step_world, get_state_descriptions
+from napari-cellular-automata.automata import AUTOMATA
+import numpy as np
+
+pyro = AUTOMATA['Pyroclastic']
+world = np.zeros((100, 100, 100), dtype=np.uint8)
+populate_world_with_state(world, 9, blob_number=1)
+states = get_state_descriptions(pyro)
+
+while True:
+    uniq, counts = np.unique(world, return_counts=True)
+    for state, count in zip(uniq, counts):
+        print(f'{states[state]}: {count}')
+    world = step_world(world, pyro, wrap=False, edge_value=10)
+```
+
+## Rules and engines
+
+In the generalized approach, rules are defined by transition dictionaries that encode how each state changes into a different state, plus some extra info such as color and state name for visualisation. This implementation is based on a [series of videos](https://www.youtube.com/watch?v=ygdPRlSo3Qg) by [tsoding](https://github.com/tsoding/). Original typescript source code: https://github.com/tsoding/autocell.
+
+For example, [Conway's Game of Life](https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life) can be defined as follows:
 
 ```python
 [
@@ -43,10 +74,35 @@ For example, [Conway's Game of Life](https://en.wikipedia.org/wiki/Conway%27s_Ga
 
 ---
 
-Inspired by the series of videos by @tsoding starting with https://www.youtube.com/watch?v=ygdPRlSo3Qg. Original source code in https://github.com/tsoding/autocell.
+A second, more limited (but smaller and faster) engine is based on the [Survival-Birth](https://softologyblog.wordpress.com/2019/12/28/3d-cellular-automata-3/) rules; neighbour types do not matter, just their number. Other than dead and alive, any number of decay states can be added, which simply "delay" the time of death of a cell. The `Game of Life` is defined as:
 
-Other references:
-- https://softologyblog.wordpress.com/2019/12/28/3d-cellular-automata-3/
+```python
+{
+    # number of non-dead neighbours necessary for survival
+    'survival': [2, 3],
+    # number of non-dead neighbours necessary for birth
+    'birth': [3],
+    # number of total states (including alive, dead, and decay)
+    'states': 2,
+}
+```
+
+or, in short form: `'2-3/3/2'`.
+
+
+You can add a custom automaton by simply adding to the `AUTOMATA` dictionary:
+
+```python
+from napari-cellular-automata.engine import rules_from_survival_birth
+from napari-cellular-automata.automata import AUTOMATA
+
+AUTOMATA['My rules'] = {
+    'ndim': 2,
+    'mode': 'survival-birth',
+    'rules': rules_from_survival_birth('2-3,5/3/4'),
+}
+```
+
 
 ----------------------------------
 

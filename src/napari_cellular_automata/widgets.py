@@ -2,14 +2,21 @@
 
 from time import sleep
 
-from napari import Viewer
-from napari.qt import thread_worker
-from napari.layers import Labels
+import numpy as np
+import pyqtgraph as pg
 from magicgui import magic_factory
-
+from napari import Viewer
+from napari.layers import Labels
+from napari.qt import thread_worker
+from napari.utils.color import ColorValue
 
 from .automata import AUTOMATA
-from .engine import step_world, init_world, get_colors, get_state_descriptions
+from .engine import (
+    get_colors,
+    get_state_descriptions,
+    populate_world_with_state,
+    step_world,
+)
 
 
 def _update_text_overlay(viewer):
@@ -18,66 +25,120 @@ def _update_text_overlay(viewer):
         viewer.text_overlay.visible = False
         return
 
-    auto = selected.metadata.get('automaton', None)
+    auto = selected.metadata.get("automaton", None)
     if auto is None:
         viewer.text_overlay.visible = False
         return
 
     viewer.text_overlay.update(
-        dict(
-            visible=True,
-            position='top_left',
-            text=(', ').join(f"{name}: {desc}" for name, desc in get_state_descriptions(auto).items())
-        )
+        {
+            "visible": True,
+            "position": "top_left",
+            "text": (", ").join(
+                f"{name}: {desc}"
+                for name, desc in get_state_descriptions(auto).items()
+            ),
+        }
     )
 
 
 @magic_factory(
-    call_button='Generate',
-    automaton=dict(choices=AUTOMATA.keys()),
-    x=dict(widget_type='Slider', min=10, max=1000),
-    y=dict(widget_type='Slider', min=10, max=1000),
-    z=dict(widget_type='Slider', min=0, max=1000),
+    call_button="Generate",
+    automaton={"choices": AUTOMATA.keys()},
+    size={"widget_type": "Slider", "min": 10, "max": 1000},
 )
-def initialize_world(viewer: Viewer, automaton: str, random_ratios: str = '', x: int = 100, y: int = 100, z: int = 0) -> Labels:
+def initialize_world(
+    viewer: Viewer, automaton: str, size: int = 100
+) -> Labels:
     selection = viewer.layers.selection
     if _update_text_overlay not in selection.events.callbacks:
         selection.events.connect(lambda: _update_text_overlay(viewer))
 
-    if not random_ratios:
-        random_ratios = '1'
-    ratios = [float(r) for r in random_ratios.split(',')]
-
-    if z > 0:
-        shape = (z, y, x)
-    else:
-        shape = (y, x)
-
-    world = init_world(shape, ratios)
-
     auto = AUTOMATA[automaton]
+
+    shape = (size,) * auto["ndim"]
+    world = np.zeros(shape, dtype=np.uint8)
 
     lb = Labels(
         world,
         name=automaton,
         color=get_colors(auto),
         opacity=1,
-        metadata={'automaton': auto},
+        metadata={"automaton": auto},
     )
     lb.brush_size = 1
     lb.bounding_box.visible = True
     lb.bounding_box.points = False
-    lb.bounding_box.line_color = 'grey'
+    lb.bounding_box.line_color = "grey"
 
     return lb
 
 
+def _get_state_choices(wdg):
+    p = getattr(wdg, "_parent", None)
+    if p is None or p.layer.value is None:
+        return []
+    return list(get_colors(p.layer.value.metadata["automaton"]).keys())
+
+
+def _init_populator(wdg):
+    wdg.state._parent = wdg
+
+
 @magic_factory(
-    call_button='Run/Pause',
-    fps=dict(widget_type='Slider', min=1, max=120),
+    call_button="Populate",
+    state={"widget_type": "ComboBox", "choices": _get_state_choices},
+    blob_density={"widget_type": "Slider", "min": 0, "max": 100000},
+    blob_size={"widget_type": "Slider", "min": 1, "max": 100},
+    blob_number={"widget_type": "Slider", "min": 1, "max": 20},
+    blob_spread={"widget_type": "Slider", "min": 1, "max": 100},
+    widget_init=_init_populator,
 )
-def run_automaton(viewer: Viewer, layer: Labels, fps=60, wrap=True, edge_value=0):
-    if getattr(run_automaton, '_worker', None) is not None:
+def populate_world(
+    layer: Labels,
+    state: int,
+    fill=False,
+    blob_density: int = 500,
+    blob_size: int = 5,
+    blob_number: int = 3,
+    blob_spread: int = 20,
+):
+    if fill:
+        layer.data[:] = state
+    else:
+        populate_world_with_state(
+            layer.data,
+            state,
+            blob_density,
+            blob_size,
+            blob_number,
+            blob_spread,
+        )
+    layer.refresh()
+
+
+def _init_runner(wdg):
+    wdg._plot = pg.PlotWidget()
+    wdg._plot.addLegend()
+    wdg.native.layout().addWidget(wdg._plot)
+    wdg.plot_states._parent = wdg
+
+
+@magic_factory(
+    call_button="Run/Pause",
+    fps={"widget_type": "Slider", "min": 1, "max": 120},
+    widget_init=_init_runner,
+    plot_states={"widget_type": "Select", "choices": _get_state_choices},
+)
+def run_automaton(
+    viewer: Viewer,
+    layer: Labels,
+    fps=60,
+    wrap=True,
+    edge_value=0,
+    plot_states=(),
+):
+    if getattr(run_automaton, "_worker", None) is not None:
         run_automaton._worker.quit()
         run_automaton._worker = None
         return
@@ -86,15 +147,34 @@ def run_automaton(viewer: Viewer, layer: Labels, fps=60, wrap=True, edge_value=0
     if _update_text_overlay not in selection.events.callbacks:
         selection.events.connect(lambda: _update_text_overlay(viewer))
 
+    # need to get it in the outer scope or magic_factory gets confused
+    plot_widget = run_automaton._plot
+
     def set_data(data):
         layer.data = data
+        stats = layer.metadata.setdefault("stats", {})
+        plot_widget.clear()
+        uniq, counts = np.unique(data, return_counts=True)
+        for state, count in zip(uniq, counts):
+            stats.setdefault(state, []).append(count)
 
-    rules = layer.metadata['automaton']
+        colors = get_colors(layer.metadata["automaton"])
+        for state in plot_states:
+            plot_widget.plot(
+                stats[state],
+                name=state,
+                pen={"color": ColorValue.validate(colors[state]) * 255},
+            )
+        plot_widget.autoRange()
 
-    @thread_worker(connect={'yielded': set_data})
+    rules = layer.metadata["automaton"]
+
+    @thread_worker(connect={"yielded": set_data})
     def run_threaded():
         while True:
-            yield step_world(layer.data, rules, wrap=wrap, edge_value=edge_value)
-            sleep(1/fps)
+            yield step_world(
+                layer.data, rules, wrap=wrap, edge_value=edge_value
+            )
+            sleep(1 / fps)
 
     run_automaton._worker = run_threaded()
