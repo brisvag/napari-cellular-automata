@@ -3,7 +3,7 @@ import numpy as np
 from scipy.ndimage import convolve
 
 
-def count_neighbours(world, nstates, wrap=True, edge_value=0):
+def _count_neighbours(world, nstates, wrap=True, edge_value=0):
     kernel = np.full((3,) * world.ndim, 1, dtype=np.uint8)
     kernel[(1,) * world.ndim] = 0
     counts = []
@@ -23,7 +23,7 @@ def count_neighbours(world, nstates, wrap=True, edge_value=0):
     return einops.rearrange(counts, "neighbours ... -> ... neighbours")
 
 
-def count_neighbours_survival_birth(world, wrap=True, edge_value=0):
+def _count_neighbours_survival_birth(world, wrap=True, edge_value=0):
     kernel = np.full((3,) * world.ndim, 1, dtype=np.uint8)
     kernel[(1,) * world.ndim] = 0
 
@@ -38,7 +38,7 @@ def count_neighbours_survival_birth(world, wrap=True, edge_value=0):
 
 
 def _step_world(world, rules, wrap=True, edge_value=0):
-    neighbours = count_neighbours(
+    neighbours = _count_neighbours(
         world, len(rules), wrap=wrap, edge_value=edge_value
     )
     new_world = np.zeros_like(world, dtype=np.uint8)
@@ -61,7 +61,7 @@ def _step_world(world, rules, wrap=True, edge_value=0):
 
 
 def _step_world_survival_birth(world, rules, wrap=True, edge_value=0):
-    neighbours = count_neighbours_survival_birth(
+    neighbours = _count_neighbours_survival_birth(
         world, wrap=wrap, edge_value=edge_value
     )
     survive = np.zeros_like(world, dtype=bool)
@@ -125,7 +125,9 @@ def get_state_descriptions(automaton):
             for i, state in enumerate(automaton["rules"])
         }
     if automaton["mode"] == "survival-birth":
-        return {"alive": "green", "dead": "transparent", "decay": "rest"}
+        states = automaton["rules"]["states"]
+        decays = {f"decay{i}": "r/g" for i in range(states - 2, 0, -1)}
+        return {"dead": "transparent", **decays, "alive": "green"}
 
 
 def populate_world_with_state(
